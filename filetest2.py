@@ -1,7 +1,7 @@
 import cv2
 import os
-from functioncode import lympho_cell_detection
-
+from fc import lympho_cell_detection
+ 
 if __name__ == "__main__":
     
 
@@ -11,10 +11,16 @@ if __name__ == "__main__":
     for file_name in overall_imgfilename:
         filepath = os.path.join(imgpath, file_name)
         print(filepath)
-        lcd = lympho_cell_detection(filepath)
+        lcd = lympho_cell_detection(filepath) 
         lcd.cell_detection()
         
 
           
         
-  
+'''
+008
+013
+015
+014
+017
+'''
