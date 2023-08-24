@@ -1,6 +1,6 @@
 import cv2
 import os
-from fc import lympho_cell_detection
+from LymphoCellDetection import lympho_cell_detection
  
 if __name__ == "__main__":
     
@@ -16,11 +16,4 @@ if __name__ == "__main__":
         
 
           
-        
-'''
-008
-013
-015
-014
-017
-'''
+    

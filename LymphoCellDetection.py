@@ -112,20 +112,15 @@ class lympho_cell_detection:
     def watershed_segmentation(self,path):
         image = cv2.imread(path)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        cv2.imshow("gray",gray)
         #cv2.imshow('gray', gray)
-
-        #watershed segmentation to separate cell
-        kernel = np.ones((3, 3), np.uint8)
-        
         
         opening = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel= np.ones((5, 5), np.uint8) , iterations=3)
         #cv2.imshow('opening', opening)
-        gradient = cv2.subtract(opening, cv2.morphologyEx(opening, cv2.MORPH_GRADIENT, kernel )) # Calculate the gradient magnitude
+        gradient = cv2.subtract(opening, cv2.morphologyEx(opening, cv2.MORPH_GRADIENT, kernel = np.ones((3, 3), np.uint8) )) # Calculate the gradient magnitude
         #cv2.imshow('gradient', gradient)
         _, binary = cv2.threshold(gradient, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU) # Apply thresholding to create a binary image
        
-        sure_bg = cv2.dilate(binary, kernel , iterations=6) # Apply morphological operations to remove small holes
+        sure_bg = cv2.dilate(binary, kernel = np.ones((3, 3), np.uint8) , iterations=6) # Apply morphological operations to remove small holes
         #cv2.imshow('sure_bg', sure_bg)
         dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 0) # Find sure foreground (unknown region)
         _, sure_fg = cv2.threshold(dist_transform, 0.6*dist_transform.max(), 255, 0)
@@ -140,97 +135,105 @@ class lympho_cell_detection:
         markers[unknown == 255] = 0
         markers = cv2.watershed(image, markers) # Apply watershed algorithm
        
-        font = cv2.FONT_HERSHEY_SIMPLEX # Label the marks with numbers and draw boundaries inside the areas
         height, width = image.shape[:2]
         img = np.zeros((height, width, 3), dtype = np.uint8)
         imglist=[]
+        numcount = 0
         for region_id in range(2, np.max(markers) + 1):  # Exclude background 
             region_mask = markers == region_id
-            #region_area = np.sum(region_mask)
-            
-            #if region_area > 100:  # Filter out small regions+
-                
-
             watershed_image = np.zeros_like(image)   
             imagecopy = image.copy()  # Mask out pixels outside the green contour
             imagecopy[~region_mask] = [0, 0, 0]
             img = watershed_image + imagecopy
             imglist.append(img)
-            #cv2.imshow("img",img)
-            #cv2.waitKey(0)
+            numcount+=1
+        return numcount, imglist
 
-
-        return imglist
-    
-    def watershed_segmentation2(self,path):
+    def watershed_segmentation1(self,path):
         image = cv2.imread(path)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         #cv2.imshow('gray', gray)
-
-        #watershed segmentation to separate cell
-        kernel = np.ones((3, 3), np.uint8)
         
-        
-        opening = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel= np.ones((5, 5), np.uint8) , iterations=4)
+        opening = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel= np.ones((5, 5), np.uint8) , iterations=3)
         #cv2.imshow('opening', opening)
-        gradient = cv2.subtract(opening, cv2.morphologyEx(opening, cv2.MORPH_GRADIENT, kernel )) # Calculate the gradient magnitude
+        gradient = cv2.subtract(opening, cv2.morphologyEx(opening, cv2.MORPH_GRADIENT, kernel = np.ones((3, 3), np.uint8) )) # Calculate the gradient magnitude
         #cv2.imshow('gradient', gradient)
         _, binary = cv2.threshold(gradient, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU) # Apply thresholding to create a binary image
        
-        sure_bg = cv2.dilate(binary, kernel= np.ones((5, 5), np.uint8) , iterations=4) # Apply morphological operations to remove small holes
+        sure_bg = cv2.dilate(binary, kernel = np.ones((3, 3), np.uint8) , iterations=6) # Apply morphological operations to remove small holes
         #cv2.imshow('sure_bg', sure_bg)
         dist_transform = cv2.distanceTransform(binary, cv2.DIST_L2, 0) # Find sure foreground (unknown region)
-        _, sure_fg = cv2.threshold(dist_transform, 0.65*dist_transform.max(), 255, 0)
+        _, sure_fg = cv2.threshold(dist_transform, 0.6*dist_transform.max(), 255, 0)
         sure_fg = np.uint8(sure_fg) 
         #cv2.imshow('sure_fg', sure_fg)
-        sure_fg1 = cv2.erode(sure_fg,kernel = np.ones((3, 3), np.uint8),iterations =3)
+        
+        contours, _ = cv2.findContours(sure_fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+        for contour in contours:
+            contour_area = cv2.contourArea(contour)
+            if contour_area>200:
+                sure_fg1 = cv2.erode(sure_fg,kernel = np.ones((2, 2), np.uint8),iterations =3)
+                contours, _ = cv2.findContours(sure_fg1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                for contour in contours:
+                    contour_area = cv2.contourArea(contour)
+                    if contour_area>150:
+                        sure_fg1 = cv2.erode(sure_fg,kernel = np.ones((3, 3), np.uint8),iterations =3)
+            else:
+                sure_fg1 = sure_fg
+        
         #cv2.imshow('sure_fg1', sure_fg1)
         unknown = cv2.subtract(sure_bg, sure_fg1) # Subtract sure foreground from sure background to get unknown region 
         #cv2.imshow('unknown', unknown)
-        num_markers, markers = cv2.connectedComponents(sure_fg1) # Label markers for the watershed algorithm
-        
+        _, markers = cv2.connectedComponents(sure_fg1) # Label markers for the watershed algorithm
+        markers += 1
         markers[unknown == 255] = 0
         markers = cv2.watershed(image, markers) # Apply watershed algorithm
        
-        font = cv2.FONT_HERSHEY_SIMPLEX # Label the marks with numbers and draw boundaries inside the areas
         height, width = image.shape[:2]
         img = np.zeros((height, width, 3), dtype = np.uint8)
         imglist=[]
-        num = 0
-        for region_id in range(0,np.max(markers)+1 ):  # Exclude background 
+        numcount = 0
+        for region_id in range(2, np.max(markers) + 1):  # Exclude background 
             region_mask = markers == region_id
-
-            #region_area = np.sum(region_mask)
-            
-            #if region_area > 100:  # Filter out small regions+
-                
-
             watershed_image = np.zeros_like(image)   
             imagecopy = image.copy()  # Mask out pixels outside the green contour
             imagecopy[~region_mask] = [0, 0, 0]
             img = watershed_image + imagecopy
             imglist.append(img)
-
-
-        return imglist
-
+            # cv2.imshow('img', img)
+            # cv2.waitKey(0)
+            numcount+=1
+        return numcount, imglist
 
     def differentiate_grouped_lymphocyte(self,image,thres):
-        result_less_than_thres = np.zeros_like(image)
-        result_more_than_thres = np.zeros_like(image)
+        result_less_than_thres_list =[]
+        result_more_than_thres_list =[]
+
         contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for contour in contours:
             
             contour_area = cv2.contourArea(contour)
+
             if contour_area < thres:
+                result_less_than_thres = np.zeros_like(image)
                 cv2.drawContours(result_less_than_thres, [contour], -1, (255, 255, 255), -1)
+                masked_imageresult_less_than_thres = cv2.bitwise_and(image, result_less_than_thres)
+                result_less_than_thres_list.append(masked_imageresult_less_than_thres)
+
             else:
+                result_more_than_thres = np.zeros_like(image)
                 cv2.drawContours(result_more_than_thres, [contour], -1, (255, 255, 255), -1)
-        return result_less_than_thres,result_more_than_thres
+                masked_imageresult_more_than_thres = cv2.bitwise_and(image, result_more_than_thres)
+                result_more_than_thres_list.append(masked_imageresult_more_than_thres)
+
+        return result_less_than_thres_list,result_more_than_thres_list
 
 
 
     def cell_detection(self):
+
+        cell_detected_list = []
+        cell_detected_maks_list = []
 
         # read cell_image_path
         original_image = cv2.imread(self.image_path)
@@ -247,103 +250,75 @@ class lympho_cell_detection:
         # cv2.imshow('Magenta Channel', magenta_channel)     
         # cv2.imshow('yellow_channel', yellow_channel)   
 
-        
-  
-
         GRAY_image = self.CMYK2GRAY(CMYK_image)
         
         ZACK_ALG_image_Cyan_Channel = self.ZACK_ALGORITHM(cyan_channel)
         #cv2.imshow('ZACK_ALG_image_Cyan_Channel', ZACK_ALG_image_Cyan_Channel) 
-        # kernel_size = 5  # You can adjust this value to change the filter size
-        # filtered_image = cv2.medianBlur(ZACK_ALG_image_Cyan_Channel, kernel_size)
-        #cv2.imshow('filtered_image', filtered_image) 
         smallNOISE_FILTERED_imagefiltered = self.FILTER_SMALLNOISE(ZACK_ALG_image_Cyan_Channel)
-        #cv2.imshow('smallNOISE_FILTERED_imagefiltered', smallNOISE_FILTERED_imagefiltered) 
+        cv2.imshow('smallNOISE_FILTERED_imagefiltered', smallNOISE_FILTERED_imagefiltered) 
         
+        result_less_than_thres_list, result_more_than_thres_list = self.differentiate_grouped_lymphocyte(smallNOISE_FILTERED_imagefiltered,1400)
+        #result_less_than_thres_img = cv2.cvtColor(np.zeros_like(original_image), cv2.COLOR_BGR2GRAY)
+        result_more_than_thres_img = cv2.cvtColor(np.zeros_like(original_image), cv2.COLOR_BGR2GRAY)
 
+        for img in result_less_than_thres_list:
+            if len(img.shape) < 3:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+                cell_detected_list.append(img)
+
+        for img in result_more_than_thres_list:
+            #img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel = np.ones((3,3),np.uint8))
+            result_more_than_thres_img = result_more_than_thres_img + img
         
-        result_less_than_thres, result_more_than_thres = self.differentiate_grouped_lymphocyte(smallNOISE_FILTERED_imagefiltered,1400)
+        # cv2.imshow('masked_imageresult_less_than_thres', result_less_than_thres_img)
+       # cv2.imshow('masked_imageresult_more_than_thres', result_more_than_thres_img)
+        #cv2.imwrite("output_image.jpeg", masked_imageresult_more_than_thres)
 
-        
-        masked_imageresult_more_than_thres = cv2.bitwise_and(smallNOISE_FILTERED_imagefiltered, result_more_than_thres)
-        masked_imageresult_less_than_thres = cv2.bitwise_and(smallNOISE_FILTERED_imagefiltered, result_less_than_thres)
-        # cv2.imshow('masked_imageresult_less_than_thres', masked_imageresult_less_than_thres)
-        # cv2.imshow('masked_imageresult_more_than_thres', masked_imageresult_more_than_thres)
-        cv2.imwrite("output_image.jpeg", masked_imageresult_more_than_thres)
-
-
-
-
-
- 
-        
-        watershed_segmented_list = []
-        watershed_image_list = self.watershed_segmentation("output_image.jpeg")
-        Second_ws_list = []
-        watershed_image = np.zeros_like(cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)) 
-        for image in watershed_image_list:
-            image = image.astype(np.uint8)
-            image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-            
-            contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-              
-            for contour in contours:
-                contour_area = cv2.contourArea(contour)
-                if contour_area<1400 and contour_area>100:
-                    watershed_image += image
-                    watershed_segmented_list.append(image)
-                    
-                else:
-                    Second_ws_list.append(image)
-                
-
-        
-        Third_ws_list = []
-        for image in Second_ws_list:
-            cv2.imwrite("output_image1.jpeg", image)
-            watershed_image_list = self.watershed_segmentation2("output_image1.jpeg")
-            for image in watershed_image_list:
-                image = image.astype(np.uint8)
-                image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-                contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                
+        black_img = np.zeros_like(original_image)
+        for grouped_cell_img in result_more_than_thres_list:
+            cv2.imwrite("output_image.jpeg", grouped_cell_img)
+            numcount, watershed_image_list = self.watershed_segmentation("output_image.jpeg")
+            for segmented_image in watershed_image_list:
+                segmented_image = segmented_image.astype(np.uint8)
+                segmented_image = cv2.cvtColor(segmented_image,cv2.COLOR_BGR2GRAY)
+                contours, _ = cv2.findContours(segmented_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 for contour in contours:
                     contour_area = cv2.contourArea(contour)
-                    
-                    if contour_area<1400 and contour_area>100:
-                        watershed_image += image
-                        watershed_segmented_list.append(image)
+                    if contour_area > 1400:
+                        cv2.imwrite("output_image1.jpeg", segmented_image)
+                        numcount, watershed_image_list1 = self.watershed_segmentation1("output_image1.jpeg")
+                        for segmented_image1 in watershed_image_list1:
+                            cell_detected_list.append(segmented_image1)
+                            # cv2.imshow("segmented_image1",segmented_image1)
+                            # cv2.waitKey(0)
+                            black_img = black_img + segmented_image1 
+                    else:
+                        if len(segmented_image.shape) < 3:
+                            segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_GRAY2BGR)
+                        cell_detected_list.append(segmented_image)
+                        # cv2.imshow("segmented_image",segmented_image)
+                        # cv2.waitKey(0)
+                        black_img = black_img + segmented_image 
+        #cv2.imshow('result_less_tha_n_thres_img', black_img ) 
 
-                    elif contour_area>1400:
-                        Third_ws_list.append(image)
-            
-            
+
+        combine_img = np.zeros_like(original_image)
+        for result_cell_img in cell_detected_list:
+            combine_img = cv2.add(combine_img , result_cell_img)   
+
+        cv2.imshow("combine_img",combine_img)
+
+        masked_image = cv2.bitwise_and(original_image, combine_img)
+        cv2.imshow('masked_image', masked_image)        
+
+        for result_cell_img in cell_detected_list:
+            masked_image = cv2.bitwise_and(original_image, result_cell_img)
+            cell_detected_maks_list.append(masked_image)
+     
         
-        #cv2.imshow("watershed_image",watershed_image)    
-        watershed_image = watershed_image.astype(np.uint8)
-        #cv2.imshow('watershed_image', watershed_image)
-
-
-        # result_less_than_1500, result_more_than_1500 = self.differentiate_grouped_lymphocyte(watershed_image,1500)
-        # cv2.imshow('Contours Less Than 1000', result_less_than_1500)
-        # cv2.imshow('Contours More Than 1000', result_more_than_1500)
-
-
-        
-    
-
-        combine_image = cv2.bitwise_or(watershed_image,masked_imageresult_less_than_thres)
-        cv2.imshow('combine_image', combine_image)
-        
-
-        
-
-
         
         
-        three_channel_image = np.stack((combine_image,) * 3, axis=-1)
-        masked_image = cv2.bitwise_and(original_image, three_channel_image)
-        cv2.imshow('masked_image', masked_image)
+
 
         cv2.waitKey(0)
         cv2.destroyAllWindows
