@@ -1,14 +1,12 @@
 import cv2
-import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import math
 
 class lympho_cell_detection:
-    def __init__(self,image_path,file_path):
+    def __init__(self,image_path):
         self.image_path = image_path
-        self.file_path = file_path
     
     def resize_image(self,image):  #resize image
         scale_percent = 30
@@ -237,7 +235,6 @@ class lympho_cell_detection:
 
         cell_detected_list = []
         cell_detected_maks_list = []
-        cell_detected_variable_list =[]
 
         # read cell_image_path
         original_image = cv2.imread(self.image_path)
@@ -313,24 +310,12 @@ class lympho_cell_detection:
                         black_img = black_img + segmented_image 
             cv2.imshow('result_less_tha_n_thres_img', black_img ) 
 
-        data_list = []
-        with open(self.file_path, 'r') as file:  
-            for line in file:
-                line = line.strip()  # Remove leading/trailing whitespace
-                if line:  # Check if the line is not empty
-                    x, y = map(int, line.split())
-                    data_list.append((x, y))
-        
-        image = np.zeros((height,width, 3), dtype=np.uint8)
-        for x,y in data_list:
-            x = int(x*0.3)
-            y = int(y*0.3)
-            cv2.circle(image, (x,y), 20, (0, 0, 255), -1) 
-        cv2.imshow('Red Circle on Black Image', image) 
-
         num_count = 0
+        data_test = (0,0,0,0,0)
         combine_img = np.zeros_like(original_image)
+        area_max = 0
         for result_cell_img in cell_detected_list:
+            
             combine_img = cv2.add(combine_img , result_cell_img) 
             
             result_cell_img = cv2.cvtColor(result_cell_img, cv2.COLOR_BGR2GRAY)  
@@ -341,14 +326,16 @@ class lympho_cell_detection:
                 
                 perimeter = cv2.arcLength(contour, True)
                 area = cv2.contourArea(contour)
+                if area> area_max:
+                    area_max = area
                 
                 convex_hull = cv2.convexHull(contour)
                 convex_area = cv2.contourArea(convex_hull)
                 convex_perimeter = cv2.arcLength(convex_hull, True)
                 if len(contour) >= 5:
                     ellipse = cv2.fitEllipse(contour)
-                major_axis = max(ellipse[1])
-                minor_axis = min(ellipse[1])
+                    major_axis = max(ellipse[1])
+                    minor_axis = min(ellipse[1])
                 if convex_perimeter != 0 and convex_area != 0:
                     roundness = (4 * math.pi * area) / (convex_perimeter ** 2)
                     
@@ -373,17 +360,18 @@ class lympho_cell_detection:
                 #text_position = (int(contour[0][0][0]), int(contour[0][0][1]) )
                 cv2.circle(combine_img, (cX, cY), 5, (0, 0, 255), -1)
                 cv2.putText(combine_img, roundness_text, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                
-                cell_detected_variable_list.append(((cX,cY),area,roundness,solidity,elongation,eccentricity,convexity))
+                #print(f" Centroid: {cX},{cY}  Area: {area}    Roundness:{roundness:.2f}   Solidty:{solidity:.2f}   Elongation:{elongation:.2f}    Eccentricity:{eccentricity:.2f}   Convexity:{convexity:.2f}")
+                if cX >10 and cY>10 and area==area_max and area>300:
+                    data_test = (roundness,solidity,elongation,eccentricity,convexity)
             # cv2.imshow("result_cell_img",result_cell_img)
-            # cv2.imshow("combine_img",combine_img)
-            # cv2.waitKey(0)
-
+            cv2.imshow("combine_img",combine_img)
+            #cv2.waitKey(0)
+        
         cv2.imshow("combine_img",combine_img)
 
         masked_image = cv2.bitwise_and(original_image, combine_img)
         cv2.imshow('masked_image', masked_image)        
-
+        
         for result_cell_img in cell_detected_list:
             masked_image = cv2.bitwise_and(original_image, result_cell_img)
             cell_detected_maks_list.append(masked_image)
@@ -398,7 +386,7 @@ class lympho_cell_detection:
 
         #cv2.waitKey(0)
         cv2.destroyAllWindows
-        return cell_detected_variable_list
+        return data_test
         
 
         
@@ -409,93 +397,8 @@ if __name__ == "__main__":
     #D:\Image_procesing\Ass\ALL_IDB1\ALL_IDB1\im\Im034_0.jpg
     #D:\Image_procesing\Ass\ALL_IDB1\ALL_IDB1\im\Im056_1.jpg
     #D:\Image_procesing\Ass\ALL_IDB1\ALL_IDB1\im\Im059_1.jpg
-    loaded_svm_classifier = joblib.load('svm_classifier_model.joblib')
-    print("Trained model loaded")
+    image_path = "D:\Image_procesing\Ass\ALL_IDB2\ALL_IDB2\img\Im104_1.tif"
 
-    image_path = "D:\Image_procesing\Ass\ALL_IDB1\ALL_IDB1\im\Im001_1.jpg"
-    file_path = r'D:\\Image_procesing\\Ass\\ALL_IDB1\\ALL_IDB1\\xyc\\Im001_1.xyc'
+    lcd = lympho_cell_detection(image_path)
 
-    lcd = lympho_cell_detection(image_path,file_path)
-
-    cell_detected_variable_list = lcd.cell_detection()
-
-    data_list = []
-    with open(file_path, 'r') as file:  
-        for line in file:
-            line = line.strip()  # Remove leading/trailing whitespace
-            if line:  # Check if the line is not empty
-                x, y = map(int, line.split())
-                data_list.append((int(x*0.3), int(y*0.3)))
-    
-    len_data_list = len(data_list)
-    Correct_numcount = 0
-    
-    for (cX,cY),area,roundness,solidity,elongation,eccentricity,convexity in cell_detected_variable_list:
-        print(f" Centroid: {cX},{cY}  Area: {area}    Roundness:{roundness:.2f}   Solidty:{solidity:.2f}   Elongation:{elongation:.2f}    Eccentricity:{eccentricity:.2f}   Convexity:{convexity:.2f}")
-        
-        Prediction_flag = False
-        Cell_detect_flag = False
-        
-
-        for (x,y) in data_list:
-            if (abs(cX-x)<5) and (abs(cY-y)<5):
-                #print(f"This cell is correct cXcY={cX},{cY}   xy={x},{y}")
-                data_list.remove((x,y))
-                Cell_detect_flag = True
-
-
-        new_test_data = [[roundness, solidity, elongation, eccentricity, convexity]]    
-        new_test_predictions = loaded_svm_classifier.predict(new_test_data)
-        #print("Predictions on new test data:", new_test_predictions)
-        Prediction_flag = True if new_test_predictions[0] == 1 else False
-
-        if Prediction_flag == True and Cell_detect_flag == True:
-            Correct_numcount = Correct_numcount + 1
-    
-    percentage_ratio = Correct_numcount/len_data_list *100
-    print("_"*10 + "RESULT" +"_"*10)
-    print(f"Pecentage Ratio = {percentage_ratio:.2f}")
-
-
-    
-
-
-
-    
-
-
-    
-
-
-
-                
-    
-    
-
-    
-
-'''contours, _ = cv2.findContours(np.uint8(region_mask), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                if contours:
-                    contour = contours[0]
-                    
-                    perimeter = cv2.arcLength(contour, True)
-                    area = cv2.contourArea(contour)
-                    
-                    convex_hull = cv2.convexHull(contour)
-                    convex_area = cv2.contourArea(convex_hull)
-                    convex_perimeter = cv2.arcLength(convex_hull, True)
-                    ellipse = cv2.fitEllipse(contour)
-                    major_axis = max(ellipse[1])
-                    minor_axis = min(ellipse[1])
-
-                    roundness = (4 * math.pi * area) / (convex_perimeter ** 2)
-                    solidity = area / convex_area
-                    elongation = 1 - (minor_axis / major_axis)
-                    eccentricity = math.sqrt(major_axis**2 - minor_axis**2) / major_axis
-                    convexity = convex_perimeter / perimeter
-
-                    # Display roundness on the mask
-                    # roundness_text = f" {number_of_masks}"
-                    # text_position = (int(contour[0][0][0]), int(contour[0][0][1]) )
-                    # cv2.putText(img, roundness_text, text_position, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-                    print(f"Mask:{number_of_masks}  Area: {area}    Roundness:{roundness:.2f}   Solidty:{solidity:.2f}   Elongation:{elongation:.2f}    Eccentricity:{eccentricity:.2f}   Convexity:{convexity:.2f}")'''
+    lcd.cell_detection()
