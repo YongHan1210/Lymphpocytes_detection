@@ -15,11 +15,15 @@ if __name__ == "__main__":
     overall_filefilename = os.listdir(filepath)
     print("Trained model loaded")
     svm_classifier = SGDClassifier(loss='hinge', max_iter=1000, tol=1e-3)
-    model_filename = 'svm_classifier_model_copy.joblib'
+    model_filename = 'svm_classifier_model.joblib'
     loaded_svm_classifier = joblib.load(model_filename)
 
     overall_file_num = 108
     overall_percentage_sum = 0
+    overall_xyc_cell_count = 0
+    overall_detected_cell_count = 0
+
+
 
     for img_file_name, file_file_name in zip(overall_imgfilename, overall_filefilename):
         img_path = os.path.join(imgpath, img_file_name)
@@ -36,12 +40,14 @@ if __name__ == "__main__":
                 if line:  # Check if the line is not empty
                     x, y = map(int, line.split())
                     data_list.append((int(x*0.3), int(y*0.3)))
+                    overall_xyc_cell_count += 1
         
         len_data_list = len(data_list)
         Correct_numcount = 0
         
+        
         for (cX,cY),area,roundness,solidity,elongation,eccentricity,convexity in cell_detected_variable_list:
-            print(f" Centroid: {cX},{cY}  Area: {area}    Roundness:{roundness:.2f}   Solidty:{solidity:.2f}   Elongation:{elongation:.2f}    Eccentricity:{eccentricity:.2f}   Convexity:{convexity:.2f}")
+            
             
             Prediction_flag = False
             Cell_detect_flag = False
@@ -49,7 +55,7 @@ if __name__ == "__main__":
 
             for (x,y) in data_list:
                 if (abs(cX-x)<5) and (abs(cY-y)<5):
-                    print(f"This cell is correct cXcY={cX},{cY}   xy={x},{y}")
+                    print(f" Centroid: {cX},{cY}  Area: {area}    Roundness:{roundness:.2f}   Solidty:{solidity:.2f}   Elongation:{elongation:.2f}    Eccentricity:{eccentricity:.2f}   Convexity:{convexity:.2f}")
                     data_list.remove((x,y))
                     Cell_detect_flag = True
 
@@ -61,6 +67,7 @@ if __name__ == "__main__":
 
             if Prediction_flag == True and Cell_detect_flag == True:
                 Correct_numcount = Correct_numcount + 1
+                overall_detected_cell_count +=1
                 # correct_label = 1
 
                 # # Retrain the SVM classifier on the updated training data
@@ -75,8 +82,8 @@ if __name__ == "__main__":
             percentage_ratio = 100 if Correct_numcount==0 and len_data_list == 0 else 0
         else:
             percentage_ratio = Correct_numcount/len_data_list *100
-        
         print("_"*10 + "RESULT" +"_"*10)
+        print(f"XYC CELL COUNT = {len_data_list}    DETECTED CELL COUNT = {Correct_numcount}")
         print(f"Pecentage Ratio = {percentage_ratio:.2f}")
         
         overall_percentage_sum = overall_percentage_sum + percentage_ratio
@@ -87,4 +94,5 @@ if __name__ == "__main__":
     overall_percentage_ratio = overall_percentage_sum/overall_file_num
     print("\n\n")
     print("*"*10 + "OVERALL DATA" + "*"*10)
+    print(f"XYC CELL COUNT = {overall_xyc_cell_count}    DETECTED CELL COUNT = {overall_detected_cell_count}")
     print(f"Overall Percentage Ratio = {overall_percentage_ratio:.2f} %")
